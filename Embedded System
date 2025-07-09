@@ -132,3 +132,6 @@ void setup() {
 void loop() {
   server.handleClient();
 }
+
+
+//  there are 2 different microcontrollers, ESP8266 and Arduino nano. the esp8266 is used to read the voltage from the solar cell and show the output in a website. the voltage is read through voltage sensor that is connected to esp8266. the Arduino nano is used to move the dynamo motor. there are 2 photosensors connected to Arduino nano with a divider in between, when one photosensor shows zero or LOW, the motors moves until both photosensors show one or HIGH. 
