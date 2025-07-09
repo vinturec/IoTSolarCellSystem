@@ -1,0 +1,134 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+
+const char* ssid = "POCO X6 Pro 5G";
+const char* password = "mumin3333592";
+
+ESP8266WebServer server(80);
+
+// Voltage sensor configuration
+const int voltagePin = A0;  // ESP8266 has only one analog input (A0)
+const float voltageDividerRatio = 5.0; // Adjust based on your voltage divider
+const float referenceVoltage = 3.3; // ESP8266 reference voltage
+const int adcResolution = 1023; // 10-bit ADC
+
+float readVoltage() {
+  int rawValue = analogRead(voltagePin);
+  float voltage = (rawValue * referenceVoltage / adcResolution) * voltageDividerRatio;
+  return voltage;
+}
+
+void handleRoot() {
+  String html = R"=====(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP8266 Voltage Monitor</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .voltage-display { 
+      font-size: 48px; 
+      font-weight: bold; 
+      margin: 20px 0; 
+      color: #0066cc;
+    }
+    .gauge {
+      width: 100%;
+      height: 30px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%;
+      background: #4CAF50;
+      width: 0%;
+      transition: width 0.5s;
+    }
+    .last-update { color: #666; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Voltage Monitor</h1>
+    <div class="voltage-display" id="voltage">0.00 V</div>
+    <div class="gauge">
+      <div class="gauge-fill" id="gauge"></div>
+    </div>
+    <div class="last-update" id="lastUpdate">Last update: --</div>
+  </div>
+
+  <script>
+    function updateVoltage() {
+      fetch('/voltage')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('voltage').textContent = data.voltage.toFixed(2) + ' V';
+          document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+          
+          // Update gauge (assuming max voltage is 15V for visualization)
+          const maxVoltage = 15;
+          const percentage = Math.min(100, (data.voltage / maxVoltage) * 100);
+          document.getElementById('gauge').style.width = percentage + '%';
+          
+          // Change color based on voltage level
+          const gauge = document.getElementById('gauge');
+          if (data.voltage > maxVoltage * 0.8) {
+            gauge.style.background = '#f44336'; // Red for high voltage
+          } else if (data.voltage > maxVoltage * 0.5) {
+            gauge.style.background = '#FFC107'; // Yellow for medium
+          } else {
+            gauge.style.background = '#4CAF50'; // Green for normal
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching voltage:', error);
+        });
+    }
+
+    // Update immediately and then every 2 seconds
+    updateVoltage();
+    setInterval(updateVoltage, 2000);
+  </script>
+</body>
+</html>
+)=====";
+
+  server.send(200, "text/html", html);
+}
+
+void handleVoltage() {
+  float voltage = readVoltage();
+  String json = "{\"voltage\": " + String(voltage) + "}";
+  server.send(200, "application/json", json);
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Connect to WiFi
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Setup server routes
+  server.on("/", handleRoot);
+  server.on("/voltage", handleVoltage);
+  
+  server.begin();
+  Serial.println("HTTP server started");
+}
+
+void loop() {
+  server.handleClient();
+}
